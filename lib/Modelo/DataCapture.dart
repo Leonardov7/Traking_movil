@@ -1,22 +1,19 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:trackingmovil/main.dart';
 
-class DataCapture{
-  //HomeStart dataSpeed=HomeStart();
+class DataCapture {
   final firebase = FirebaseFirestore.instance;
+
   Future<Position> determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
+
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (serviceEnabled) {
-    } else {
-      await Geolocator.openLocationSettings();
-    }
     if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
       return Future.error('Location services are disabled.');
     }
+
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -24,39 +21,34 @@ class DataCapture{
         return Future.error('Location permissions are denied');
       }
     }
+
     if (permission == LocationPermission.deniedForever) {
       return Future.error(
           'Location permissions are permanently denied, we cannot request permissions.');
     }
-    print(await Geolocator.getCurrentPosition());
-    String dato = await Geolocator.getCurrentPosition().toString();
-   // await insertarDatos(dato);
+
     return await Geolocator.getCurrentPosition();
   }
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  insertarDatos(dato) async {
+
+  void insertarDatos(String geoposicion, double velocidad, String hora) async {
     try {
-      await firebase.collection('Data').doc().set({"Location": dato});
+      await firebase.collection('Data').add({
+        "Geoposicion": geoposicion,
+        "Velocidad": velocidad,
+        "Hora": hora,
+        "timestamp": FieldValue.serverTimestamp()
+      });
     } catch (e) {
-      print("ERRROR....." + e.toString());
+      print("ERROR....." + e.toString());
     }
   }
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  Future<double> speed() async {
-    double speedMps=0;
+
+  void startSpeedTracking(Function(double) onSpeedChanged) {
     Geolocator.getPositionStream().listen((position) {
-      speedMps = position.speed; // This is your speed
-     // dataSpeed.velocidad.text=speedMps.toString();
+      double speedMps = position.speed; // Obtiene la velocidad en m/s
       print('VELOCIDAD:::' + speedMps.toString());
-      DateTime now = DateTime.now();
-      print(now.hour.toString() +
-          ":" +
-          now.minute.toString() +
-          ":" +
-          now.second.toString());
+      onSpeedChanged(speedMps);
     });
-    return await speedMps;
   }
-
-
 }
+
