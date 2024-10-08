@@ -30,12 +30,13 @@ class DataCapture {
     return await Geolocator.getCurrentPosition();
   }
 
-  void insertarDatos(String geoposicion, double velocidad, String hora) async {
+  void insertarDatos(String geoposicion, double velocidad, String hora, String sessionId) async {
     try {
       await firebase.collection('Data').add({
         "Geoposicion": geoposicion,
         "Velocidad": velocidad,
         "Hora": hora,
+        "sessionId": sessionId,
         "timestamp": FieldValue.serverTimestamp()
       });
     } catch (e) {
@@ -45,8 +46,7 @@ class DataCapture {
 
   void startSpeedTracking(Function(double) onSpeedChanged) {
     Geolocator.getPositionStream().listen((position) {
-      double speedMps = position.speed; // Obtiene la velocidad en m/s
-      print('VELOCIDAD:::' + speedMps.toString());
+      double speedMps = position.speed;
       onSpeedChanged(speedMps);
     });
   }

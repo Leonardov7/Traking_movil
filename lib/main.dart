@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'dart:async'; // Importación del Timer
+import 'dart:async';
 import 'firebase_options.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:trackingmovil/Modelo/DataCapture.dart';
+import 'package:uuid/uuid.dart'; // Importa uuid para generar un ID único
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,13 +26,6 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSwatch().copyWith(
           secondary: Colors.deepPurpleAccent,
         ),
-        buttonTheme: ButtonThemeData(
-          buttonColor: Colors.deepPurple,
-          textTheme: ButtonTextTheme.primary,
-        ),
-        textTheme: TextTheme(
-          bodyText1: TextStyle(fontSize: 16, color: Colors.grey[800]),
-        ),
       ),
     );
   }
@@ -50,6 +44,7 @@ class HomeStart extends State<Home> {
   TextEditingController geoposicion = TextEditingController();
 
   Timer? _timer;
+  String? sessionId; // ID de la sesión actual
   int _secondsElapsed = 0;
 
   @override
@@ -65,8 +60,23 @@ class HomeStart extends State<Home> {
   }
 
   void startSavingData() {
+    // Genera un nuevo ID de sesión
+    var uuid = Uuid();
+    sessionId = uuid.v4(); // Genera un UUID
+    print("Nueva sesión iniciada con ID: $sessionId");
+
+    // Almacena la sesión en Firestore
+    firebase.collection('Sessions').doc(sessionId).set({
+      'sessionId': sessionId,
+      'startTime': FieldValue.serverTimestamp(),
+    }).then((_) {
+      print("Sesión almacenada en Firestore");
+    }).catchError((error) {
+      print("Error al almacenar la sesión: $error");
+    });
+
+    // Inicia el temporizador para la captura de datos
     _timer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      // Incrementa el contador de segundos
       _secondsElapsed++;
 
       // Convierte los segundos a formato hh:mm:ss
@@ -84,9 +94,9 @@ class HomeStart extends State<Home> {
       double velocidadActual = double.tryParse(velocidad.text) ?? 0.0;
 
       // Guarda en la base de datos
-      datos.insertarDatos(local, velocidadActual, hora.text);
+      datos.insertarDatos(local, velocidadActual, hora.text, sessionId!);
 
-      print("Datos guardados: Localización=$local, Velocidad=$velocidadActual, Hora=${hora.text}");
+      print("Datos guardados: Localización=$local, Velocidad=$velocidadActual, Hora=${hora.text}, Sesión=$sessionId");
     });
   }
 
@@ -94,9 +104,23 @@ class HomeStart extends State<Home> {
     if (_timer != null) {
       _timer!.cancel();
       _timer = null;
-      _secondsElapsed = 0; // Reinicia el contador de tiempo
+      _secondsElapsed = 0;
       hora.text = "00:00:00"; // Reinicia el campo de hora
-      print("Detenido el guardado de datos.");
+
+      // Actualiza el documento de la sesión en Firestore con el tiempo de finalización
+      if (sessionId != null) {
+        firebase.collection('Sessions').doc(sessionId).update({
+          'endTime': FieldValue.serverTimestamp(),
+        }).then((_) {
+          print("Fin de sesión actualizado en Firestore");
+        }).catchError((error) {
+          print("Error al actualizar el fin de sesión: $error");
+        });
+
+        // Limpia el ID de sesión actual
+        print("Sesión $sessionId finalizada.");
+        sessionId = null;
+      }
     }
   }
 
@@ -134,7 +158,7 @@ class HomeStart extends State<Home> {
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
                     backgroundColor: Colors.green,
-                    foregroundColor: Colors.white, // Color del texto en blanco
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0),
                     ),
@@ -149,7 +173,7 @@ class HomeStart extends State<Home> {
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
                     backgroundColor: Colors.red,
-                    foregroundColor: Colors.white, // Color del texto en blanco
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0),
                     ),
